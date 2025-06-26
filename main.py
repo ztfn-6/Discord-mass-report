@@ -4,18 +4,7 @@ import json
 import os
 from pystyle import Colorate, Colors, Center, Add
 
-# ####################################################################################
-# IMPORTANT WARNING:
-# 1. ACCOUNT AUTOMATION: Using scripts to automate actions like this violates
-#    Discord's Terms of Service and can result in a permanent BAN of your account.
-# 2. SECURITY: Your authorization token is like your password.
-#    NEVER share it with anyone. If someone gets your token, they can control your account.
-# 3. RESPONSIBILITY: This script is provided for educational purposes only.
-#    Misuse is entirely your own responsibility.
-# ####################################################################################
-
 def get_animated_banner():
-    """Generates and returns the animated banner text."""
     banner_logo = """
          ⣴⣶⣄
        ⣴⣿⣇⡙⢿⣷⣄
@@ -40,136 +29,136 @@ def get_animated_banner():
                                                       
           Discord Mass Reporter by ztnq
 """
-    # The Colorate.Vertical function provides a shimmering/animated effect as it prints
     return Colorate.Vertical(Colors.purple_to_blue, Center.XCenter(Add.Add(banner_logo, banner_text, 0)), 1)
 
-def send_reports():
-    """Main function to handle the reporting process."""
-    url = "https://discord.com/api/v9/reporting/message"
+def load_tokens(file_path="tokens.txt"):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            tokens = [line.strip() for line in f if line.strip()]
+        if not tokens:
+            raise Exception("No tokens found in tokens.txt.")
+        return tokens
+    except FileNotFoundError:
+        print(f"[ERROR] File not found: {file_path}")
+        return []
+    except Exception as e:
+        print(f"[ERROR] Failed to read tokens: {e}")
+        return []
 
-    # Maps user choice to the correct breadcrumbs for the payload
+def send_reports():
+    url = "https://discord.com/api/v9/reporting/message"
     report_options = {
         "1": ([7, 94], "I don't like this message"),
         "2": ([7, 95], "Spam"),
         "3": ([7, 73, 98], "Harassing me or someone else"),
         "4": ([7, 73, 99], "Using rude, vulgar, or offensive language"),
-        "5": ([7, 77, 87, 122], "User is under 13 (Original report type)") # The one you had before
+        "5": ([7, 77, 87, 122], "User is under 13")
     }
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print(get_animated_banner())
+    print("\n--- Provide report details ---")
+
+    channel_id = input("(!) Enter the CHANNEL ID: ").strip()
+    message_id = input("(!) Enter the MESSAGE ID to report: ").strip()
+
+    if not all([channel_id, message_id]):
+        print("\n[ERROR] Channel ID and message ID are required. Aborting.")
+        return
+
+    print("\n--- Select report type ---")
+    for key, value in report_options.items():
+        print(f"  [{key}] {value[1]}")
+
+    choice = ""
+    while choice not in report_options:
+        choice = input("\n(?) Enter your choice (1-5): ").strip()
+        if choice not in report_options:
+            print("[ERROR] Invalid choice. Try again.")
+
+    breadcrumbs = report_options[choice][0]
+    reason_text = report_options[choice][1]
+    print(f"[*] Report type: {reason_text}")
 
     try:
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print(get_animated_banner())
-        print("\n--- Please provide the details for the report ---")
-        auth_token = input("(!) Enter your authorization TOKEN: ").strip()
-        channel_id = input("(!) Enter the CHANNEL ID: ").strip()
-        message_id = input("(!) Enter the MESSAGE ID to report: ").strip()
-
-        if not all([auth_token, channel_id, message_id]):
-            print("\n[ERROR] All fields (token, channel ID, message ID) are required. Aborting.")
-            return
-
-        # --- Report Type Selection Menu ---
-        print("\n--- Select the type of report ---")
-        for key, value in report_options.items():
-            print(f"  [{key}] {value[1]}")
-        
-        choice = ""
-        while choice not in report_options:
-            choice = input("\n(?) Enter your choice (1-5): ").strip()
-            if choice not in report_options:
-                print("[ERROR] Invalid choice. Please select a number from the list.")
-
-        selected_breadcrumbs = report_options[choice][0]
-        selected_reason_text = report_options[choice][1]
-        print(f"[*] Report type selected: {selected_reason_text}")
-        
-        # --- Continue with quantity and delay ---
-        num_reports = int(input("\n(?) How many reports do you want to send? "))
-        delay = float(input("(?) What is the delay in seconds between each report? (e.g., 1.5): "))
-
+        num_reports = int(input("\n(?) How many reports per token? "))
+        delay = float(input("(?) Delay between each report (in seconds): "))
     except ValueError:
-        print("\n[ERROR] The number of reports and the delay must be valid numbers. Aborting.")
-        return
-    except Exception as e:
-        print(f"\n[ERROR] An unexpected error occurred during setup: {e}")
+        print("[ERROR] Invalid number. Aborting.")
         return
 
-    headers = {
-        'Authorization': auth_token,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': f'https://discord.com/channels/@me/{channel_id}',
-        'Origin': 'https://discord.com',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
-
-    payload = {
-        "version": "1.0",
-        "variant": "7",
-        "language": "en",
-        "breadcrumbs": selected_breadcrumbs, # <-- This is now dynamic based on user choice
-        "elements": {},
-        "channel_id": channel_id,
-        "message_id": message_id,
-        "name": "message"
-    }
+    tokens = load_tokens("tokens.txt")
+    if not tokens:
+        print("[ERROR] No valid tokens to use.")
+        return
 
     print("\n" + "="*50)
-    print(f"Starting to send {num_reports} report(s)...")
-    print("Press Ctrl+C to stop at any time.")
+    print(f"Starting to send reports using {len(tokens)} token(s)...")
     print("="*50 + "\n")
 
-    success_count = 0
-    fail_count = 0
+    total_success = 0
+    total_fail = 0
 
-    for i in range(num_reports):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
+    for token_index, token in enumerate(tokens, start=1):
+        print(f"\n🧪 Using token {token_index}/{len(tokens)}")
 
-            response_text = response.text.strip() if response.text else "No Response Body"
-            print(f"📨 API Response [{i + 1}]: {response.status_code} | {response_text}")
+        headers = {
+            'Authorization': token,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': f'https://discord.com/channels/@me/{channel_id}',
+            'Origin': 'https://discord.com',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
 
-            if response.status_code in [200, 204]:
-                print(f"✅ Report [{i + 1}/{num_reports}] sent successfully!")
-                success_count += 1
-            elif response.status_code == 401:
-                print(f"❌ Report [{i + 1}/{num_reports}] FAILED. AUTHENTICATION error. Check your token. Aborting.")
-                fail_count += 1
-                break
-            elif response.status_code == 429:
-                retry_after = response.json().get('retry_after', delay * 2)
-                print(f"⚠️ Rate Limited! Waiting for {retry_after:.2f} seconds...")
-                time.sleep(retry_after)
-                # We don't increment i here, we just retry the same report after the cooldown
-                continue
-            else:
-                print(f"❌ Report [{i + 1}/{num_reports}] FAILED.")
-                fail_count += 1
+        payload = {
+            "version": "1.0",
+            "variant": "7",
+            "language": "en",
+            "breadcrumbs": breadcrumbs,
+            "elements": {},
+            "channel_id": channel_id,
+            "message_id": message_id,
+            "name": "message"
+        }
 
-            if i < num_reports - 1:
-                time.sleep(delay)
+        for i in range(num_reports):
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=10)
+                response_text = response.text.strip() if response.text else "No Response Body"
+                print(f"📨 [{i + 1}] Status: {response.status_code} | {response_text}")
 
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Connection error on report [{i + 1}]: {e}")
-            fail_count += 1
-            print("Waiting 10 seconds before trying again...")
-            time.sleep(10)
-        except KeyboardInterrupt:
-            print("\n\n[INFO] Operation interrupted by user.")
-            break
-        except Exception as e:
-            print(f"\n[ERROR] An unexpected error occurred during sending: {e}")
-            fail_count += 1
-            break
+                if response.status_code in [200, 204]:
+                    print(f"✅ Report sent successfully.")
+                    total_success += 1
+                elif response.status_code == 401:
+                    print(f"❌ Invalid token. Skipping to next.")
+                    total_fail += 1
+                    break
+                elif response.status_code == 429:
+                    retry_after = response.json().get('retry_after', delay * 2)
+                    print(f"⚠️ Rate limited. Waiting {retry_after:.2f} seconds...")
+                    time.sleep(retry_after)
+                    continue
+                else:
+                    print(f"❌ Failed to report. Status: {response.status_code}")
+                    total_fail += 1
+
+                if i < num_reports - 1:
+                    time.sleep(delay)
+
+            except Exception as e:
+                print(f"[ERROR] Exception while reporting: {e}")
+                total_fail += 1
+                time.sleep(10)
 
     print("\n" + "="*50)
-    print("Process finished.")
-    print(f"✅ Successes: {success_count}")
-    print(f"❌ Failures: {fail_count}")
+    print("Reporting process completed.")
+    print(f"✅ Total Successes: {total_success}")
+    print(f"❌ Total Failures: {total_fail}")
     print("="*50)
     input("\nPress Enter to exit...")
-
 
 if __name__ == "__main__":
     send_reports()
